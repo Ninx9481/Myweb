@@ -159,3 +159,26 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     topPlatform, topGenre, recentlyAdded, topRated,
   };
 }
+
+// ─── Storage (Upload Image) ──────────────────────────────────────────────────
+
+export async function uploadMediaImage(file: File): Promise<string> {
+  // 1. ตั้งชื่อไฟล์ใหม่ให้ไม่ซ้ำกัน
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+  const filePath = fileName;
+
+  // 2. อัพโหลดไปที่ Bucket ชื่อ 'media'
+  const { error: uploadError } = await supabase.storage
+    .from('media')
+    .upload(filePath, file);
+
+  if (uploadError) throw uploadError;
+
+  // 3. เอา URL ของรูปออกมา
+  const { data } = supabase.storage
+    .from('media')
+    .getPublicUrl(filePath);
+
+  return data.publicUrl;
+}
