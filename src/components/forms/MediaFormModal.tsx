@@ -1,11 +1,12 @@
 "use client";
 // src/components/forms/MediaFormModal.tsx
 
-import { useState }                   from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useCreateMedia, useUpdateMedia } from "@/hooks/useMedia";
 import { X, Link as LinkIcon, Image as ImageIcon, Loader2 } from "lucide-react";
-import toast                          from "react-hot-toast";
-import clsx                           from "clsx";
+import toast from "react-hot-toast";
+import clsx from "clsx";
 import type { MediaItem, MediaItemInsert, MediaType, MediaStatus } from "@/types";
 import {
   TYPE_LABELS, GENRES, PLATFORMS, WATCHED_WITH_OPTIONS,
@@ -45,14 +46,13 @@ function defaultForm(type: MediaType, item?: MediaItem): FormData {
 }
 
 export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFormModalProps) {
-  const [form,     setForm]     = useState<FormData>(() => defaultForm(defaultType, item));
-  const [imageUrl, setImageUrl] = useState<string>(item?.image_url ?? "");
+  const [form,      setForm]      = useState<FormData>(() => defaultForm(defaultType, item));
+  const [imageUrl,  setImageUrl]  = useState<string>(item?.image_url ?? "");
   const [previewOk, setPreviewOk] = useState(!!item?.image_url);
-  const [saving,   setSaving]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
 
   const createMutation = useCreateMedia();
   const updateMutation = useUpdateMedia();
-
   const isEdit = !!item;
 
   const set = (key: keyof FormData, value: unknown) =>
@@ -64,11 +64,7 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
 
     setSaving(true);
     try {
-      // Parse genre string → array
-      const genreArr = form.genre
-        .split(",")
-        .map(g => g.trim())
-        .filter(Boolean);
+      const genreArr = form.genre.split(",").map(g => g.trim()).filter(Boolean);
 
       const payload: MediaItemInsert = {
         ...form,
@@ -76,14 +72,10 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
         image_url: imageUrl.trim() || null,
       };
 
-      let savedId = item?.id;
-
       if (isEdit) {
         await updateMutation.mutateAsync({ id: item!.id, updates: payload });
-        savedId = item!.id;
       } else {
-        const created = await createMutation.mutateAsync(payload);
-        savedId = created.id;
+        await createMutation.mutateAsync(payload);
       }
 
       toast.success(isEdit ? "Updated!" : "Added to library!");
@@ -98,9 +90,15 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
 
   const statuses = TYPE_STATUSES[form.type];
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-2xl animate-fade-up">
+  // Portal — renders directly on document.body to escape any
+  // CSS transform on ancestor elements (which breaks position:fixed)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-2xl">
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-[var(--surface)] border-b border-[var(--border)]">
           <h2 className="font-display text-xl font-bold">
@@ -121,10 +119,7 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
                 <button
                   key={t}
                   type="button"
-                  onClick={() => {
-                    set("type", t);
-                    set("status", TYPE_STATUSES[t][0]);
-                  }}
+                  onClick={() => { set("type", t); set("status", TYPE_STATUSES[t][0]); }}
                   className={clsx(
                     "py-2 rounded-xl text-sm font-semibold border transition-all",
                     form.type === t
@@ -141,12 +136,7 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
           {/* Title */}
           <div>
             <Label>Title *</Label>
-            <Input
-              value={form.title}
-              onChange={e => set("title", e.target.value)}
-              placeholder="Enter title…"
-              required
-            />
+            <Input value={form.title} onChange={e => set("title", e.target.value)} placeholder="Enter title…" required />
           </div>
 
           {/* Status + Rating */}
@@ -183,23 +173,11 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Release Year</Label>
-              <Input
-                type="number"
-                value={form.release_year ?? ""}
-                onChange={e => set("release_year", e.target.value ? Number(e.target.value) : null)}
-                placeholder="2024"
-                min={1800}
-                max={2100}
-              />
+              <Input type="number" value={form.release_year ?? ""} onChange={e => set("release_year", e.target.value ? Number(e.target.value) : null)} placeholder="2024" min={1800} max={2100} />
             </div>
             <div>
               <Label>Genre (comma-separated)</Label>
-              <Input
-                value={form.genre}
-                onChange={e => set("genre", e.target.value)}
-                placeholder="Action, Drama…"
-                list="genre-list"
-              />
+              <Input value={form.genre} onChange={e => set("genre", e.target.value)} placeholder="Action, Drama…" list="genre-list" />
               <datalist id="genre-list">
                 {GENRES.map(g => <option key={g} value={g} />)}
               </datalist>
@@ -289,27 +267,22 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
                 "w-full px-4 py-2.5 rounded-xl text-sm resize-none",
                 "bg-[var(--card)] border border-[var(--border)]",
                 "text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
-                "focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30",
-                "transition-all",
+                "focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-all",
               )}
             />
           </div>
 
-          {/* Poster / Cover URL */}
+          {/* Image URL */}
           <div>
             <Label>Poster / Cover URL</Label>
-            <div className="space-y-3">
-              {/* URL input */}
+            <div className="space-y-2">
               <div className="relative">
                 <LinkIcon size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <Input
                   type="url"
                   value={imageUrl}
-                  onChange={e => {
-                    setImageUrl(e.target.value);
-                    setPreviewOk(false);
-                  }}
-                  placeholder="https://image.tmdb.org/… หรือ URL รูปภาพใด ๆ"
+                  onChange={e => { setImageUrl(e.target.value); setPreviewOk(false); }}
+                  placeholder="วาง URL รูปภาพที่นี่ เช่น https://image.tmdb.org/..."
                   className="pl-9 pr-10"
                 />
                 {imageUrl && (
@@ -317,34 +290,30 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
                     type="button"
                     onClick={() => { setImageUrl(""); setPreviewOk(false); }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-red-400 transition-colors"
-                    title="ล้าง URL"
                   >
                     <X size={14} />
                   </button>
                 )}
               </div>
 
-              {/* Preview box */}
               {imageUrl.trim() ? (
                 <div className={clsx(
-                  "relative rounded-xl overflow-hidden border transition-all",
-                  previewOk
-                    ? "border-[var(--accent)]/30 bg-[var(--card)]"
-                    : "border-[var(--border)] bg-[var(--card)]",
+                  "relative rounded-xl overflow-hidden border",
+                  previewOk ? "border-[var(--accent)]/40" : "border-[var(--border)]",
                 )}>
-                  <div className="flex items-center justify-center" style={{ height: 160 }}>
+                  <div className="flex items-center justify-center bg-[var(--card)]" style={{ height: 140 }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={imageUrl}
-                      alt="Preview"
-                      className="max-h-full max-w-full object-contain"
+                      alt="preview"
+                      className="max-h-full max-w-full object-contain p-1"
                       onLoad={() => setPreviewOk(true)}
                       onError={() => setPreviewOk(false)}
                     />
                     {!previewOk && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--card)]">
-                        <ImageIcon size={28} className="text-[var(--border)]" />
-                        <p className="text-xs text-[var(--text-muted)]">ไม่สามารถโหลดรูปได้ — ตรวจสอบ URL อีกครั้ง</p>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-[var(--card)]">
+                        <ImageIcon size={24} className="text-[var(--border)]" />
+                        <p className="text-xs text-[var(--text-muted)]">โหลดรูปไม่ได้ — ตรวจสอบ URL</p>
                       </div>
                     )}
                   </div>
@@ -355,48 +324,29 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
                   )}
                 </div>
               ) : (
-                <div className="h-24 rounded-xl border border-dashed border-[var(--border)] flex items-center justify-center gap-2 text-[var(--text-muted)]">
-                  <ImageIcon size={18} />
-                  <span className="text-sm">ตัวอย่างรูปจะแสดงที่นี่</span>
+                <div className="h-16 rounded-xl border border-dashed border-[var(--border)] flex items-center justify-center gap-2 text-[var(--text-muted)]">
+                  <ImageIcon size={16} />
+                  <span className="text-xs">ตัวอย่างรูปจะแสดงที่นี่</span>
                 </div>
               )}
-
-              <p className="text-[11px] text-[var(--text-muted)]">
-                💡 แนะนำ: ใช้ลิงก์จาก{" "}
-                <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">TMDB</a>
-                {", "}
-                <a href="https://myanimelist.net" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">MyAnimeList</a>
-                {" หรือ "}
-                <a href="https://www.google.com/imghp" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">Google Images</a>
-                {" (คลิกขวา → คัดลอก URL รูปภาพ)"}
-              </p>
             </div>
           </div>
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3 rounded-xl text-sm font-semibold border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--card)] transition-all"
-            >
+            <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl text-sm font-semibold border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--card)] transition-all">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold bg-[var(--accent)] text-black hover:opacity-90 disabled:opacity-50 transition-all"
-            >
+            <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold bg-[var(--accent)] text-black hover:opacity-90 disabled:opacity-50 transition-all">
               {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : (isEdit ? "Save Changes" : "Add to Library")}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
-
-// ─── Small UI helpers ─────────────────────────────────────────────────────────
 
 function Label({ children }: { children: React.ReactNode }) {
   return <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">{children}</label>;
@@ -410,8 +360,7 @@ function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputEleme
         "w-full px-4 py-2.5 rounded-xl text-sm",
         "bg-[var(--card)] border border-[var(--border)]",
         "text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
-        "focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30",
-        "transition-all",
+        "focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-all",
         className,
       )}
     />
@@ -426,8 +375,7 @@ function Select({ className, children, ...props }: React.SelectHTMLAttributes<HT
         "w-full px-4 py-2.5 rounded-xl text-sm",
         "bg-[var(--card)] border border-[var(--border)]",
         "text-[var(--text-primary)]",
-        "focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30",
-        "transition-all",
+        "focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-all",
         className,
       )}
     >
