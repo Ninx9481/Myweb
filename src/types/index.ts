@@ -60,10 +60,6 @@ export interface DashboardStats {
 
 // ─── UI helpers ──────────────────────────────────────────────────────────────
 
-export const PLATFORMS: Platform[] = [
-  "YouTube", "Netflix", "Disney+", "iQiyi", "WeTV", "MonoMax", "HBO", "Amazon Prime", "Apple TV+", "Other",
-];
-
 export const GENRES = [
   "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary",
   "Drama", "Fantasy", "History", "Horror", "Mystery", "Romance",
