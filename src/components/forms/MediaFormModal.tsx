@@ -1,11 +1,9 @@
 "use client";
 // src/components/forms/MediaFormModal.tsx
 
-import { useState, useCallback }      from "react";
-import { useDropzone }                from "react-dropzone";
+import { useState }                   from "react";
 import { useCreateMedia, useUpdateMedia } from "@/hooks/useMedia";
-import { uploadPoster }               from "@/lib/supabase";
-import { X, Upload, Image as ImageIcon, Loader2 } from "lucide-react";
+import { X, Link as LinkIcon, Image as ImageIcon, Loader2 } from "lucide-react";
 import toast                          from "react-hot-toast";
 import clsx                           from "clsx";
 import type { MediaItem, MediaItemInsert, MediaType, MediaStatus } from "@/types";
@@ -47,30 +45,15 @@ function defaultForm(type: MediaType, item?: MediaItem): FormData {
 }
 
 export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFormModalProps) {
-  const [form,      setForm]      = useState<FormData>(() => defaultForm(defaultType, item));
-  const [file,      setFile]      = useState<File | null>(null);
-  const [preview,   setPreview]   = useState<string | null>(item?.image_url ?? null);
-  const [saving,    setSaving]    = useState(false);
+  const [form,     setForm]     = useState<FormData>(() => defaultForm(defaultType, item));
+  const [imageUrl, setImageUrl] = useState<string>(item?.image_url ?? "");
+  const [previewOk, setPreviewOk] = useState(!!item?.image_url);
+  const [saving,   setSaving]   = useState(false);
 
   const createMutation = useCreateMedia();
   const updateMutation = useUpdateMedia();
 
   const isEdit = !!item;
-
-  // File drop
-  const onDrop = useCallback((accepted: File[]) => {
-    const f = accepted[0];
-    if (!f) return;
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
-  }, []);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { "image/*": [".jpg", ".jpeg", ".png", ".webp"] },
-    maxFiles: 1,
-    maxSize: 5 * 1024 * 1024,
-  });
 
   const set = (key: keyof FormData, value: unknown) =>
     setForm(f => ({ ...f, [key]: value }));
@@ -90,25 +73,17 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
       const payload: MediaItemInsert = {
         ...form,
         genre:     genreArr.length ? genreArr : null,
-        image_url: form.image_url,
+        image_url: imageUrl.trim() || null,
       };
 
       let savedId = item?.id;
 
       if (isEdit) {
-        const updated = await updateMutation.mutateAsync({ id: item!.id, updates: payload });
-        savedId = updated.id;
+        await updateMutation.mutateAsync({ id: item!.id, updates: payload });
+        savedId = item!.id;
       } else {
         const created = await createMutation.mutateAsync(payload);
         savedId = created.id;
-      }
-
-      // Upload image if new file selected
-      if (file && savedId) {
-        const url = await uploadPoster(file, savedId);
-        if (url) {
-          await updateMutation.mutateAsync({ id: savedId, updates: { image_url: url } });
-        }
       }
 
       toast.success(isEdit ? "Updated!" : "Added to library!");
@@ -320,41 +295,81 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
             />
           </div>
 
-          {/* Poster upload */}
+          {/* Poster / Cover URL */}
           <div>
-            <Label>Poster / Cover</Label>
-            <div
-              {...getRootProps()}
-              className={clsx(
-                "relative flex flex-col items-center justify-center gap-3",
-                "h-40 rounded-2xl border-2 border-dashed cursor-pointer transition-all",
-                isDragActive
-                  ? "border-[var(--accent)] bg-[var(--accent-light)]"
-                  : "border-[var(--border)] hover:border-[var(--accent)]/50 hover:bg-[var(--card)]",
-              )}
-            >
-              <input {...getInputProps()} />
-              {preview ? (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={preview} alt="Preview" className="h-full w-full object-contain rounded-2xl p-1" />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-2xl opacity-0 hover:opacity-100 transition-opacity">
-                    <p className="text-white text-xs font-semibold">Click to replace</p>
+            <Label>Poster / Cover URL</Label>
+            <div className="space-y-3">
+              {/* URL input */}
+              <div className="relative">
+                <LinkIcon size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                <Input
+                  type="url"
+                  value={imageUrl}
+                  onChange={e => {
+                    setImageUrl(e.target.value);
+                    setPreviewOk(false);
+                  }}
+                  placeholder="https://image.tmdb.org/… หรือ URL รูปภาพใด ๆ"
+                  className="pl-9 pr-10"
+                />
+                {imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => { setImageUrl(""); setPreviewOk(false); }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                    title="ล้าง URL"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Preview box */}
+              {imageUrl.trim() ? (
+                <div className={clsx(
+                  "relative rounded-xl overflow-hidden border transition-all",
+                  previewOk
+                    ? "border-[var(--accent)]/30 bg-[var(--card)]"
+                    : "border-[var(--border)] bg-[var(--card)]",
+                )}>
+                  <div className="flex items-center justify-center" style={{ height: 160 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imageUrl}
+                      alt="Preview"
+                      className="max-h-full max-w-full object-contain"
+                      onLoad={() => setPreviewOk(true)}
+                      onError={() => setPreviewOk(false)}
+                    />
+                    {!previewOk && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--card)]">
+                        <ImageIcon size={28} className="text-[var(--border)]" />
+                        <p className="text-xs text-[var(--text-muted)]">ไม่สามารถโหลดรูปได้ — ตรวจสอบ URL อีกครั้ง</p>
+                      </div>
+                    )}
                   </div>
-                </>
+                  {previewOk && (
+                    <div className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-[var(--accent)] text-black text-[10px] font-bold">
+                      ✓ โหลดสำเร็จ
+                    </div>
+                  )}
+                </div>
               ) : (
-                <>
-                  <div className="w-10 h-10 rounded-xl bg-[var(--accent-light)] flex items-center justify-center">
-                    <Upload size={18} className="text-[var(--accent)]" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-[var(--text-primary)]">
-                      {isDragActive ? "Drop it here!" : "Drag & drop or click to upload"}
-                    </p>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5">JPG, PNG, WebP · max 5MB</p>
-                  </div>
-                </>
+                <div className="h-24 rounded-xl border border-dashed border-[var(--border)] flex items-center justify-center gap-2 text-[var(--text-muted)]">
+                  <ImageIcon size={18} />
+                  <span className="text-sm">ตัวอย่างรูปจะแสดงที่นี่</span>
+                </div>
               )}
+
+              <p className="text-[11px] text-[var(--text-muted)]">
+                💡 แนะนำ: ใช้ลิงก์จาก{" "}
+                <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">TMDB</a>
+                {", "}
+                <a href="https://myanimelist.net" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">MyAnimeList</a>
+                {" หรือ "}
+                <a href="https://www.google.com/imghp" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">Google Images</a>
+                {" (คลิกขวา → คัดลอก URL รูปภาพ)"}
+              </p>
             </div>
           </div>
 
