@@ -2,7 +2,7 @@
 
 export type MediaType   = "movie" | "tv" | "book" | "manga";
 export type MediaStatus = "watching" | "watched" | "reading" | "read" | "plan_to_watch" | "plan_to_read" | "dropped";
-export type Platform    = "YouTube" | "Netflix" | "Disney+" | "iQiyi" | "WeTV" | "MonoMax" | "HBO" | "Amazon Prime" | "Apple TV+" | "Other";
+export type Platform = "YouTube" | "Netflix" | "Disney+" | "iQiyi" | "WeTV" | "MonoMax" | "HBO" | "Amazon Prime" | "Apple TV+" | "MajorCineplex" | "SF Cinema" | "House Samyan" | "Other";
 
 export interface MediaItem {
   id:              string;
@@ -94,4 +94,15 @@ export const TYPE_LABELS: Record<MediaType, string> = {
   manga: "Manga",
 };
 
-export const WATCHED_WITH_OPTIONS = ["Solo", "Partner", "Family", "Friends", "Online Party"];
+export const PLATFORMS: Platform[] = [
+  // Streaming
+  "Netflix", "Disney+", "HBO", "Amazon Prime", "Apple TV+",
+  "YouTube", "iQiyi", "WeTV", "MonoMax",
+  // Cinema
+  "MajorCineplex", "SF Cinema", "House Samyan",
+  "Other",
+];
+
+// "Solo" → ไม่แสดงช่องกรอกชื่อ
+// อื่น ๆ → แสดงช่องกรอกชื่อคนที่ไปด้วย
+export const WATCHED_WITH_OPTIONS = ["Solo", "Partner", "Family", "Friends", "Online Party", "Other"];

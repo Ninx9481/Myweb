@@ -46,10 +46,19 @@ function defaultForm(type: MediaType, item?: MediaItem): FormData {
 }
 
 export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFormModalProps) {
-  const [form,      setForm]      = useState<FormData>(() => defaultForm(defaultType, item));
-  const [imageUrl,  setImageUrl]  = useState<string>(item?.image_url ?? "");
-  const [previewOk, setPreviewOk] = useState(!!item?.image_url);
-  const [saving,    setSaving]    = useState(false);
+  const [form,           setForm]           = useState<FormData>(() => defaultForm(defaultType, item));
+  const [imageUrl,       setImageUrl]       = useState<string>(item?.image_url ?? "");
+  const [previewOk,      setPreviewOk]      = useState(!!item?.image_url);
+  const [saving,         setSaving]         = useState(false);
+  // watched_with: แยก type (dropdown) กับ names (text input)
+  const [watchedWithType,  setWatchedWithType]  = useState<string>(() => {
+    if (!item?.watched_with) return "Solo";
+    return WATCHED_WITH_OPTIONS.includes(item.watched_with) ? item.watched_with : "Other";
+  });
+  const [watchedWithNames, setWatchedWithNames] = useState<string>(() => {
+    if (!item?.watched_with) return "";
+    return WATCHED_WITH_OPTIONS.includes(item.watched_with) ? "" : item.watched_with;
+  });
 
   const createMutation = useCreateMedia();
   const updateMutation = useUpdateMedia();
@@ -62,14 +71,19 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
     e.preventDefault();
     if (!form.title.trim()) { toast.error("Title is required"); return; }
 
+    const watchedWithValue = watchedWithType === "Solo"
+      ? "Solo"
+      : watchedWithNames.trim() || watchedWithType;
+
     setSaving(true);
     try {
       const genreArr = form.genre.split(",").map(g => g.trim()).filter(Boolean);
 
       const payload: MediaItemInsert = {
         ...form,
-        genre:     genreArr.length ? genreArr : null,
-        image_url: imageUrl.trim() || null,
+        genre:        genreArr.length ? genreArr : null,
+        image_url:    imageUrl.trim() || null,
+        watched_with: watchedWithValue || null,
       };
 
       if (isEdit) {
@@ -195,17 +209,53 @@ export function MediaFormModal({ item, defaultType = "movie", onClose }: MediaFo
                   <Label>Platform</Label>
                   <Select value={form.platform ?? ""} onChange={e => set("platform", e.target.value || null)}>
                     <option value="">Select platform…</option>
-                    {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+                    <optgroup label="🎬 โรงหนัง">
+                      <option value="MajorCineplex">MajorCineplex</option>
+                      <option value="SF Cinema">SF Cinema</option>
+                      <option value="House Samyan">House Samyan</option>
+                    </optgroup>
+                    <optgroup label="📺 Streaming">
+                      <option value="Netflix">Netflix</option>
+                      <option value="Disney+">Disney+</option>
+                      <option value="HBO">HBO</option>
+                      <option value="Amazon Prime">Amazon Prime</option>
+                      <option value="Apple TV+">Apple TV+</option>
+                      <option value="YouTube">YouTube</option>
+                      <option value="iQiyi">iQiyi</option>
+                      <option value="WeTV">WeTV</option>
+                      <option value="MonoMax">MonoMax</option>
+                    </optgroup>
+                    <optgroup label="อื่น ๆ">
+                      <option value="Other">Other</option>
+                    </optgroup>
                   </Select>
                 </div>
                 <div>
                   <Label>Watched With</Label>
-                  <Select value={form.watched_with ?? ""} onChange={e => set("watched_with", e.target.value || null)}>
-                    <option value="">Select…</option>
+                  <Select
+                    value={watchedWithType}
+                    onChange={e => {
+                      setWatchedWithType(e.target.value);
+                      if (e.target.value === "Solo") setWatchedWithNames("");
+                    }}
+                  >
                     {WATCHED_WITH_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
                   </Select>
                 </div>
               </div>
+
+              {/* ช่องกรอกชื่อ — แสดงเมื่อไม่ใช่ Solo */}
+              {watchedWithType !== "Solo" && (
+                <div>
+                  <Label>ชื่อคนที่ดูด้วย</Label>
+                  <Input
+                    value={watchedWithNames}
+                    onChange={e => setWatchedWithNames(e.target.value)}
+                    placeholder="เช่น มิ้ง, โบ, เจน…"
+                  />
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Watch Date</Label>

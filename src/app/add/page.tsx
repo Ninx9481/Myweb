@@ -2,14 +2,15 @@
 // src/app/add/page.tsx
 
 import { useState } from "react";
-import { useRouter }              from "next/navigation";
-import { useCreateMedia }         from "@/hooks/useMedia";
+import { useRouter } from "next/navigation";
+import { useCreateMedia } from "@/hooks/useMedia";
 import {
-  Link as LinkIcon, ArrowLeft, Loader2, Star,
-  Film, Tv2, BookOpen, BookMarked, Image as ImageIcon, X,
+  ArrowLeft, Loader2, Star,
+  Film, Tv2, BookOpen, BookMarked,
+  Link as LinkIcon, Image as ImageIcon, X,
 } from "lucide-react";
-import toast  from "react-hot-toast";
-import clsx   from "clsx";
+import toast from "react-hot-toast";
+import clsx from "clsx";
 import type { MediaType, MediaStatus, Platform } from "@/types";
 import {
   TYPE_LABELS, GENRES, PLATFORMS, WATCHED_WITH_OPTIONS,
@@ -51,8 +52,6 @@ const INITIAL: FormData = {
   episodes: null, current_episode: null,
   author: "", total_chapters: null, current_chapter: null, publisher: "",
 };
-
-// ─── Section wrapper ──────────────────────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -100,15 +99,15 @@ function SelectField({ className, children, ...props }: React.SelectHTMLAttribut
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
-
 export default function AddPage() {
   const router = useRouter();
   const [form,      setForm]      = useState<FormData>(INITIAL);
   const [imageUrl,  setImageUrl]  = useState("");
   const [previewOk, setPreviewOk] = useState(false);
-  const [saving,    setSaving]    = useState(false);
-  const [hover,     setHover]     = useState<number | null>(null);
+  const [saving,           setSaving]           = useState(false);
+  const [hover,            setHover]            = useState<number | null>(null);
+  const [watchedWithType,  setWatchedWithType]  = useState("Solo");
+  const [watchedWithNames, setWatchedWithNames] = useState("");
 
   const createMutation = useCreateMedia();
 
@@ -128,6 +127,12 @@ export default function AddPage() {
     try {
       const genreArr = form.genre.split(",").map(g => g.trim()).filter(Boolean);
 
+        // ถ้าเลือก Solo → บันทึก "Solo"
+        // ถ้าเลือกอื่น → บันทึกชื่อที่กรอก (fallback เป็น category ถ้าไม่ได้กรอก)
+        const watchedWithValue = watchedWithType === "Solo"
+          ? "Solo"
+          : watchedWithNames.trim() || watchedWithType;
+
       const payload = {
         title:           form.title,
         type:            form.type,
@@ -137,7 +142,7 @@ export default function AddPage() {
         image_url:       imageUrl.trim() || null,
         genre:           genreArr.length ? genreArr : null,
         notes:           form.notes || null,
-        watched_with:    form.watched_with || null,
+        watched_with:    watchedWithValue || null,
         watched_date:    form.watched_date || null,
         platform:        (form.platform || null) as Platform | null,
         episodes:        form.episodes,
@@ -149,7 +154,6 @@ export default function AddPage() {
       };
 
       await createMutation.mutateAsync(payload);
-
       toast.success("Added to your library! 🎉");
       router.push(`/${form.type === "tv" ? "tv" : form.type === "movie" ? "movies" : form.type === "book" ? "books" : "manga"}`);
     } catch (err) {
@@ -183,20 +187,16 @@ export default function AddPage() {
 
       <form onSubmit={handleSubmit} className="space-y-8">
 
-        {/* ── Cover / Poster URL ── */}
+        {/* ── Image URL ── */}
         <Section title="Cover / Poster URL">
           <div className="space-y-3">
-            {/* URL input */}
             <div className="relative">
               <LinkIcon size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <Input
                 type="url"
                 value={imageUrl}
-                onChange={e => {
-                  setImageUrl(e.target.value);
-                  setPreviewOk(false);
-                }}
-                placeholder="https://image.tmdb.org/… หรือ URL รูปภาพใด ๆ"
+                onChange={e => { setImageUrl(e.target.value); setPreviewOk(false); }}
+                placeholder="วาง URL รูปภาพที่นี่ เช่น https://image.tmdb.org/..."
                 className="pl-9 pr-10"
               />
               {imageUrl && (
@@ -204,59 +204,53 @@ export default function AddPage() {
                   type="button"
                   onClick={() => { setImageUrl(""); setPreviewOk(false); }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-red-400 transition-colors"
-                  title="ล้าง URL"
                 >
                   <X size={14} />
                 </button>
               )}
             </div>
 
-            {/* Live preview */}
             {imageUrl.trim() ? (
               <div className={clsx(
-                "relative rounded-2xl overflow-hidden border transition-all",
-                previewOk ? "border-[var(--accent)]/30" : "border-[var(--border)]",
+                "relative rounded-2xl overflow-hidden border",
+                previewOk ? "border-[var(--accent)]/40" : "border-[var(--border)]",
               )}>
-                <div className="flex items-center justify-center bg-[var(--card)]" style={{ height: 200 }}>
+                <div className="flex items-center justify-center bg-[var(--card)]" style={{ minHeight: 180 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={imageUrl}
-                    alt="Poster preview"
-                    className="max-h-full max-w-full object-contain p-2"
+                    alt="preview"
+                    className="max-h-48 max-w-full object-contain p-2"
                     onLoad={() => setPreviewOk(true)}
                     onError={() => setPreviewOk(false)}
                   />
                   {!previewOk && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                      <ImageIcon size={32} className="text-[var(--border)]" />
-                      <p className="text-sm text-[var(--text-muted)]">ไม่สามารถโหลดรูปได้ — ตรวจสอบ URL</p>
+                      <ImageIcon size={28} className="text-[var(--border)]" />
+                      <p className="text-xs text-[var(--text-muted)]">โหลดรูปไม่ได้ — ตรวจสอบ URL อีกครั้ง</p>
                     </div>
                   )}
                 </div>
                 {previewOk && (
-                  <div className="absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-[var(--accent)] text-black text-[10px] font-bold shadow">
+                  <div className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-[var(--accent)] text-black text-[10px] font-bold">
                     ✓ โหลดสำเร็จ
                   </div>
                 )}
               </div>
             ) : (
-              <div className="h-28 rounded-2xl border-2 border-dashed border-[var(--border)] flex flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
-                <ImageIcon size={22} />
-                <p className="text-sm">ตัวอย่างรูปจะแสดงที่นี่เมื่อใส่ URL</p>
+              <div className="h-24 rounded-2xl border-2 border-dashed border-[var(--border)] flex items-center justify-center gap-2 text-[var(--text-muted)]">
+                <ImageIcon size={18} />
+                <span className="text-sm">ตัวอย่างรูปจะแสดงที่นี่</span>
               </div>
             )}
 
-            <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
-              💡 แนะนำ: คัดลอก URL จาก{" "}
-              <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-medium">TMDB</a>
-              {", "}
-              <a href="https://myanimelist.net" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-medium">MyAnimeList</a>
-              {" หรือ Google Images → คลิกขวาที่รูป → คัดลอก URL รูปภาพ"}
+            <p className="text-[11px] text-[var(--text-muted)]">
+              💡 คัดลอก URL จาก TMDB, MyAnimeList หรือ Google Images (คลิกขวาที่รูป → คัดลอก URL รูปภาพ)
             </p>
           </div>
         </Section>
 
-        {/* ── Type ── */}
+        {/* ── Media Type ── */}
         <Section title="Media Type">
           <div className="grid grid-cols-4 gap-3">
             {MEDIA_TYPES.map(t => (
@@ -280,7 +274,7 @@ export default function AddPage() {
           </div>
         </Section>
 
-        {/* ── Core Info ── */}
+        {/* ── Details ── */}
         <Section title="Details">
           <div>
             <Label>Title *</Label>
@@ -291,7 +285,6 @@ export default function AddPage() {
               required
             />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Status</Label>
@@ -305,13 +298,10 @@ export default function AddPage() {
                 type="number"
                 value={form.release_year ?? ""}
                 onChange={e => set("release_year", e.target.value ? Number(e.target.value) : null)}
-                placeholder="2024"
-                min={1800}
-                max={2100}
+                placeholder="2024" min={1800} max={2100}
               />
             </div>
           </div>
-
           <div>
             <Label>Genre (comma-separated)</Label>
             <Input
@@ -329,39 +319,32 @@ export default function AddPage() {
         {/* ── Rating ── */}
         <Section title="Your Rating">
           <div className="flex flex-col items-center gap-3 py-2">
-            <div
-              className="flex gap-2"
-              onMouseLeave={() => setHover(null)}
-            >
+            <div className="flex gap-2" onMouseLeave={() => setHover(null)}>
               {[1, 2, 3, 4, 5].map(n => (
                 <button
                   key={n}
                   type="button"
                   onMouseEnter={() => setHover(n)}
                   onClick={() => set("rating", form.rating === n ? null : n)}
-                  className="group transition-transform hover:scale-125 active:scale-110"
+                  className="transition-transform hover:scale-125 active:scale-110"
                 >
                   <Star
                     size={36}
                     className={clsx(
                       "transition-colors duration-100",
-                      n <= ratingDisplay
-                        ? "fill-yellow-400 text-yellow-400"
-                        : "text-[var(--border)] fill-[var(--border)]",
+                      n <= ratingDisplay ? "fill-yellow-400 text-yellow-400" : "text-[var(--border)] fill-[var(--border)]",
                     )}
                   />
                 </button>
               ))}
             </div>
             <p className="text-sm text-[var(--text-muted)] h-5">
-              {ratingDisplay > 0
-                ? ["", "Poor", "Fair", "Good", "Great", "Masterpiece"][ratingDisplay]
-                : "Click to rate"}
+              {ratingDisplay > 0 ? ["", "Poor", "Fair", "Good", "Great", "Masterpiece"][ratingDisplay] : "Click to rate"}
             </p>
           </div>
         </Section>
 
-        {/* ── Movie / TV Specific ── */}
+        {/* ── Movie / TV ── */}
         {(form.type === "movie" || form.type === "tv") && (
           <Section title="Watch Details">
             <div className="grid grid-cols-2 gap-4">
@@ -369,97 +352,94 @@ export default function AddPage() {
                 <Label>Platform</Label>
                 <SelectField value={form.platform} onChange={e => set("platform", e.target.value as Platform | "")}>
                   <option value="">Select platform…</option>
-                  {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+                  <optgroup label="🎬 โรงหนัง">
+                    <option value="MajorCineplex">MajorCineplex</option>
+                    <option value="SF Cinema">SF Cinema</option>
+                    <option value="House Samyan">House Samyan</option>
+                  </optgroup>
+                  <optgroup label="📺 Streaming">
+                    <option value="Netflix">Netflix</option>
+                    <option value="Disney+">Disney+</option>
+                    <option value="HBO">HBO</option>
+                    <option value="Amazon Prime">Amazon Prime</option>
+                    <option value="Apple TV+">Apple TV+</option>
+                    <option value="YouTube">YouTube</option>
+                    <option value="iQiyi">iQiyi</option>
+                    <option value="WeTV">WeTV</option>
+                    <option value="MonoMax">MonoMax</option>
+                  </optgroup>
+                  <optgroup label="อื่น ๆ">
+                    <option value="Other">Other</option>
+                  </optgroup>
                 </SelectField>
               </div>
               <div>
                 <Label>Watched With</Label>
-                <SelectField value={form.watched_with} onChange={e => set("watched_with", e.target.value)}>
-                  <option value="">Select…</option>
+                <SelectField
+                  value={watchedWithType}
+                  onChange={e => {
+                    setWatchedWithType(e.target.value);
+                    if (e.target.value === "Solo") setWatchedWithNames("");
+                  }}
+                >
                   {WATCHED_WITH_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
                 </SelectField>
               </div>
             </div>
 
+            {/* ช่องกรอกชื่อ — แสดงเมื่อไม่ใช่ Solo */}
+            {watchedWithType !== "Solo" && (
+              <div>
+                <Label>ชื่อคนที่ไปดูด้วย</Label>
+                <Input
+                  value={watchedWithNames}
+                  onChange={e => setWatchedWithNames(e.target.value)}
+                  placeholder="เช่น มิ้ง, โบ, เจน…"
+                />
+              </div>
+            )}
+
             <div>
               <Label>Watch Date</Label>
-              <Input
-                type="date"
-                value={form.watched_date}
-                onChange={e => set("watched_date", e.target.value)}
-              />
+              <Input type="date" value={form.watched_date} onChange={e => set("watched_date", e.target.value)} />
             </div>
-
             {form.type === "tv" && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Current Episode</Label>
-                  <Input
-                    type="number"
-                    value={form.current_episode ?? ""}
-                    onChange={e => set("current_episode", e.target.value ? Number(e.target.value) : null)}
-                    placeholder="0"
-                    min={0}
-                  />
+                  <Input type="number" value={form.current_episode ?? ""} onChange={e => set("current_episode", e.target.value ? Number(e.target.value) : null)} placeholder="0" min={0} />
                 </div>
                 <div>
                   <Label>Total Episodes</Label>
-                  <Input
-                    type="number"
-                    value={form.episodes ?? ""}
-                    onChange={e => set("episodes", e.target.value ? Number(e.target.value) : null)}
-                    placeholder="e.g. 24"
-                    min={0}
-                  />
+                  <Input type="number" value={form.episodes ?? ""} onChange={e => set("episodes", e.target.value ? Number(e.target.value) : null)} placeholder="24" min={0} />
                 </div>
               </div>
             )}
           </Section>
         )}
 
-        {/* ── Book / Manga Specific ── */}
+        {/* ── Book / Manga ── */}
         {(form.type === "book" || form.type === "manga") && (
           <Section title={`${TYPE_LABELS[form.type]} Details`}>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Author</Label>
-                <Input
-                  value={form.author}
-                  onChange={e => set("author", e.target.value)}
-                  placeholder="Author name…"
-                />
+                <Input value={form.author} onChange={e => set("author", e.target.value)} placeholder="Author name…" />
               </div>
               <div>
                 <Label>Publisher</Label>
-                <Input
-                  value={form.publisher}
-                  onChange={e => set("publisher", e.target.value)}
-                  placeholder="Publisher…"
-                />
+                <Input value={form.publisher} onChange={e => set("publisher", e.target.value)} placeholder="Publisher…" />
               </div>
             </div>
-
             {form.type === "manga" && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Current Chapter</Label>
-                  <Input
-                    type="number"
-                    value={form.current_chapter ?? ""}
-                    onChange={e => set("current_chapter", e.target.value ? Number(e.target.value) : null)}
-                    placeholder="0"
-                    min={0}
-                  />
+                  <Input type="number" value={form.current_chapter ?? ""} onChange={e => set("current_chapter", e.target.value ? Number(e.target.value) : null)} placeholder="0" min={0} />
                 </div>
                 <div>
                   <Label>Total Chapters</Label>
-                  <Input
-                    type="number"
-                    value={form.total_chapters ?? ""}
-                    onChange={e => set("total_chapters", e.target.value ? Number(e.target.value) : null)}
-                    placeholder="e.g. 400"
-                    min={0}
-                  />
+                  <Input type="number" value={form.total_chapters ?? ""} onChange={e => set("total_chapters", e.target.value ? Number(e.target.value) : null)} placeholder="400" min={0} />
                 </div>
               </div>
             )}
@@ -471,7 +451,7 @@ export default function AddPage() {
           <textarea
             value={form.notes}
             onChange={e => set("notes", e.target.value)}
-            placeholder="Your personal thoughts, quotes you loved, recommendations…"
+            placeholder="Your personal thoughts…"
             rows={4}
             className={clsx(
               "w-full px-4 py-3 rounded-xl text-sm resize-none",
@@ -487,28 +467,16 @@ export default function AddPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className={clsx(
-              "flex-1 py-3.5 rounded-2xl text-sm font-semibold border border-[var(--border)]",
-              "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--card)] transition-all",
-            )}
+            className="flex-1 py-3.5 rounded-2xl text-sm font-semibold border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--card)] transition-all"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={saving}
-            className={clsx(
-              "flex-[2] flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-bold",
-              "bg-[var(--accent)] text-black hover:opacity-90 active:scale-98 transition-all",
-              "shadow-lg shadow-[var(--accent-glow)]",
-              "disabled:opacity-50 disabled:cursor-not-allowed",
-            )}
+            className="flex-[2] flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-bold bg-[var(--accent)] text-black hover:opacity-90 transition-all shadow-lg shadow-[var(--accent-glow)] disabled:opacity-50"
           >
-            {saving ? (
-              <><Loader2 size={18} className="animate-spin" /> Saving to library…</>
-            ) : (
-              <><span className="text-lg">+</span> Add to Library</>
-            )}
+            {saving ? <><Loader2 size={18} className="animate-spin" /> Saving…</> : <>+ Add to Library</>}
           </button>
         </div>
       </form>
