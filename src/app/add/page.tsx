@@ -1,14 +1,12 @@
 "use client";
 // src/app/add/page.tsx
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useRouter }              from "next/navigation";
-import { useDropzone }            from "react-dropzone";
-import { useCreateMedia, useUpdateMedia } from "@/hooks/useMedia";
-import { uploadPoster }           from "@/lib/supabase";
+import { useCreateMedia }         from "@/hooks/useMedia";
 import {
-  Upload, ArrowLeft, Loader2, Star,
-  Film, Tv2, BookOpen, BookMarked,
+  Link as LinkIcon, ArrowLeft, Loader2, Star,
+  Film, Tv2, BookOpen, BookMarked, Image as ImageIcon, X,
 } from "lucide-react";
 import toast  from "react-hot-toast";
 import clsx   from "clsx";
@@ -106,31 +104,16 @@ function SelectField({ className, children, ...props }: React.SelectHTMLAttribut
 
 export default function AddPage() {
   const router = useRouter();
-  const [form,    setForm]    = useState<FormData>(INITIAL);
-  const [file,    setFile]    = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [saving,  setSaving]  = useState(false);
-  const [hover,   setHover]   = useState<number | null>(null);
+  const [form,      setForm]      = useState<FormData>(INITIAL);
+  const [imageUrl,  setImageUrl]  = useState("");
+  const [previewOk, setPreviewOk] = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [hover,     setHover]     = useState<number | null>(null);
 
   const createMutation = useCreateMedia();
-  const updateMutation = useUpdateMedia();
 
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm(f => ({ ...f, [key]: value }));
-
-  const onDrop = useCallback((accepted: File[]) => {
-    const f = accepted[0];
-    if (!f) return;
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
-  }, []);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept:   { "image/*": [".jpg", ".jpeg", ".png", ".webp"] },
-    maxFiles: 1,
-    maxSize:  5 * 1024 * 1024,
-  });
 
   const handleTypeChange = (t: MediaType) => {
     const defaultStatus = t === "book" || t === "manga" ? "plan_to_read" : "plan_to_watch";
@@ -151,7 +134,7 @@ export default function AddPage() {
         status:          form.status,
         rating:          form.rating,
         release_year:    form.release_year,
-        image_url:       null as string | null,
+        image_url:       imageUrl.trim() || null,
         genre:           genreArr.length ? genreArr : null,
         notes:           form.notes || null,
         watched_with:    form.watched_with || null,
@@ -165,14 +148,7 @@ export default function AddPage() {
         publisher:       form.publisher || null,
       };
 
-      const created = await createMutation.mutateAsync(payload);
-
-      if (file) {
-        const url = await uploadPoster(file, created.id);
-        if (url) {
-          await updateMutation.mutateAsync({ id: created.id, updates: { image_url: url } });
-        }
-      }
+      await createMutation.mutateAsync(payload);
 
       toast.success("Added to your library! 🎉");
       router.push(`/${form.type === "tv" ? "tv" : form.type === "movie" ? "movies" : form.type === "book" ? "books" : "manga"}`);
@@ -207,43 +183,76 @@ export default function AddPage() {
 
       <form onSubmit={handleSubmit} className="space-y-8">
 
-        {/* ── Poster Upload ── */}
-        <Section title="Cover / Poster">
-          <div
-            {...getRootProps()}
-            className={clsx(
-              "relative flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed cursor-pointer transition-all",
-              preview ? "h-64" : "h-44",
-              isDragActive
-                ? "border-[var(--accent)] bg-[var(--accent-light)]"
-                : "border-[var(--border)] hover:border-[var(--accent)]/60 hover:bg-[var(--card)]",
-            )}
-          >
-            <input {...getInputProps()} />
-            {preview ? (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={preview} alt="Poster preview" className="h-full w-full object-contain rounded-2xl p-2" />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-2xl opacity-0 hover:opacity-100 transition-opacity">
-                  <div className="text-center text-white">
-                    <Upload size={24} className="mx-auto mb-2" />
-                    <p className="text-sm font-semibold">Click to replace</p>
+        {/* ── Cover / Poster URL ── */}
+        <Section title="Cover / Poster URL">
+          <div className="space-y-3">
+            {/* URL input */}
+            <div className="relative">
+              <LinkIcon size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+              <Input
+                type="url"
+                value={imageUrl}
+                onChange={e => {
+                  setImageUrl(e.target.value);
+                  setPreviewOk(false);
+                }}
+                placeholder="https://image.tmdb.org/… หรือ URL รูปภาพใด ๆ"
+                className="pl-9 pr-10"
+              />
+              {imageUrl && (
+                <button
+                  type="button"
+                  onClick={() => { setImageUrl(""); setPreviewOk(false); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                  title="ล้าง URL"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Live preview */}
+            {imageUrl.trim() ? (
+              <div className={clsx(
+                "relative rounded-2xl overflow-hidden border transition-all",
+                previewOk ? "border-[var(--accent)]/30" : "border-[var(--border)]",
+              )}>
+                <div className="flex items-center justify-center bg-[var(--card)]" style={{ height: 200 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imageUrl}
+                    alt="Poster preview"
+                    className="max-h-full max-w-full object-contain p-2"
+                    onLoad={() => setPreviewOk(true)}
+                    onError={() => setPreviewOk(false)}
+                  />
+                  {!previewOk && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                      <ImageIcon size={32} className="text-[var(--border)]" />
+                      <p className="text-sm text-[var(--text-muted)]">ไม่สามารถโหลดรูปได้ — ตรวจสอบ URL</p>
+                    </div>
+                  )}
+                </div>
+                {previewOk && (
+                  <div className="absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-[var(--accent)] text-black text-[10px] font-bold shadow">
+                    ✓ โหลดสำเร็จ
                   </div>
-                </div>
-              </>
+                )}
+              </div>
             ) : (
-              <>
-                <div className="w-12 h-12 rounded-2xl bg-[var(--accent-light)] flex items-center justify-center">
-                  <Upload size={22} className="text-[var(--accent)]" />
-                </div>
-                <div className="text-center">
-                  <p className="font-semibold text-[var(--text-primary)]">
-                    {isDragActive ? "Drop to upload" : "Drag & drop poster"}
-                  </p>
-                  <p className="text-sm text-[var(--text-muted)] mt-1">or click to browse · JPG PNG WebP · max 5MB</p>
-                </div>
-              </>
+              <div className="h-28 rounded-2xl border-2 border-dashed border-[var(--border)] flex flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
+                <ImageIcon size={22} />
+                <p className="text-sm">ตัวอย่างรูปจะแสดงที่นี่เมื่อใส่ URL</p>
+              </div>
             )}
+
+            <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+              💡 แนะนำ: คัดลอก URL จาก{" "}
+              <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-medium">TMDB</a>
+              {", "}
+              <a href="https://myanimelist.net" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline font-medium">MyAnimeList</a>
+              {" หรือ Google Images → คลิกขวาที่รูป → คัดลอก URL รูปภาพ"}
+            </p>
           </div>
         </Section>
 
